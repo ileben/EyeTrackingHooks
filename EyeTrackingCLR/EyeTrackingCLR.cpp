@@ -1,11 +1,14 @@
 #include "stdafx.h"
-
+#include <windows.h>
+#include <string>
+#include <sstream>
 #include "EyeTrackingCLR.h"
 
 using namespace System; // Object
 using namespace System::IO; // Path
 using namespace System::Reflection; // Assembly
 using namespace System::Windows::Forms;
+using namespace System::Windows::Input;
 
 static String^ GetLocalAssemblyPath(String^ name)
 {
@@ -45,10 +48,17 @@ static Assembly^ AssemblyResolve(Object^ Sender, ResolveEventArgs^ args)
     return nullptr;
 }
 
+static void GetFocusedText()
+{
+	MessageBox::Show("GetFocusedText");
+}
+
 extern "C"
 {
 	bool isInitialized = false;
 	bool followGaze = false;
+	char *s_text = nullptr;
+	std::string s_string = "";
      
     __declspec(dllexport)
 	void Initialize()
@@ -115,5 +125,69 @@ extern "C"
 	void ZoomPush()
 	{
 		return EyeTrackingHooks::EyeTracking::ZoomPush();
+	}
+
+	__declspec(dllexport)
+	void TeleportCursor()
+	{
+		return EyeTrackingHooks::EyeTracking::TeleportCursor();
+	}
+
+	__declspec(dllexport)
+	const char * Test2()
+	{
+		System::Windows::IInputElement^ input = Keyboard::FocusedElement;
+		if (!input)
+		{
+			s_text = "No focus";
+			return s_text;
+		}
+		
+		TextBox^ i = dynamic_cast<TextBox^>(input);
+		if (i)
+		{
+			s_text = "TextBox";
+			return s_text;
+		}
+		else
+		{
+			s_text = "Not TextBox";
+			return s_text;
+		}
+
+		HWND hwndForeground = GetForegroundWindow();
+		if (hwndForeground == NULL)
+		{
+			s_text = "Foreground window is null";
+			return s_text;
+		}
+
+		if (! AttachThreadInput (GetCurrentThreadId(), GetWindowThreadProcessId(hwndForeground, NULL ), true))
+		{
+			s_text = "Failed to attach thread input";
+			return s_text;
+		}
+
+		HWND hWndEdit = GetFocus ();
+		// tidy up
+		AttachThreadInput (GetCurrentThreadId(), GetWindowThreadProcessId(hwndForeground, NULL ), false);
+	
+		if (hWndEdit != NULL)
+		{
+			TCHAR * text = new TCHAR[100];
+			text[0] = 0;
+			SendMessage(hWndEdit, WM_GETTEXT, 99, (LPARAM)text);
+			std::wstring w = text;
+			s_string = std::string(w.begin(), w.end());
+			return s_string.c_str();
+		}
+		//intptr_t h = (intptr_t)hWndEdit;
+		//IntPtr h = (IntPtr)hWndEdit;
+		std::ostringstream oss;
+		oss << hWndEdit;
+		s_string = oss.str();
+		return s_string.c_str();
+		//String^ test = gcnew String(oss.str().c_str());
+		//MessageBox::Show(h.ToString());
 	}
 }

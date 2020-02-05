@@ -10,6 +10,7 @@ extern "C"
 	void Connect();
 	int GetX();
 	int GetY();
+	const char * Test2();
 }
 
 int main(array<System::String ^> ^args)
@@ -18,6 +19,7 @@ int main(array<System::String ^> ^args)
 	Connect();
 	int x = GetX();
 	int y = GetY();
+	Test2();
 	getchar();
     return 0;
 }

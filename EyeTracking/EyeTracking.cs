@@ -287,6 +287,11 @@ namespace EyeTrackingHooks
 			Unzoom();
 		}
 
+		public static void TeleportCursor()
+		{
+			System.Windows.Forms.Cursor.Position = new Point(gazeX, gazeY);
+		}
+
 		public static int GetX()
 		{
 			return gazeX;
