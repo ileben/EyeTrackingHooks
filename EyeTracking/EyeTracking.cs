@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows;
 using System.Drawing;
+using System.Runtime.InteropServices;
+
 using Tobii.Interaction;
 using Tobii.Interaction.Framework;
 
@@ -13,6 +15,24 @@ namespace EyeTrackingHooks
 {
 	public class EyeTracking
     {
+		[DllImport("user32.dll")]
+		public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
+
+		const int VK_UP = 0x26; //up key
+		const int VK_DOWN = 0x28;  //down key
+		const int VK_LEFT = 0x25;
+		const int VK_RIGHT = 0x27;
+		const uint KEYEVENTF_KEYUP = 0x0002;
+		const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+
+		enum State
+		{
+			None,
+			Strafing
+		}
+
+		static bool keyDown = false;
+
 		static Host host = null;
 
 		static int gazeX = 0;
@@ -30,6 +50,8 @@ namespace EyeTrackingHooks
 
 		static ZoomPictureBox zoomPicture = null;
 		static ZoomBounds zoomBounds = new ZoomBounds(0, 0);
+
+		static State state = State.None;
 
 		// Zoom source and destination rectangles
 		class ZoomBounds
@@ -131,6 +153,8 @@ namespace EyeTrackingHooks
 					System.Windows.Forms.Cursor.Position = new Point(smoothX, smoothY);
 				}
 			}
+
+			ProcessGaze();
 		}
 
 		public static void UpdateZoomBackground()
@@ -306,5 +330,42 @@ namespace EyeTrackingHooks
 		{
 			return 42;
 		}
-    }
+
+		public static void Strafe()
+		{
+			state = State.Strafing;
+		}
+
+		public static void StopMoving()
+		{
+			state = State.None;
+		}
+
+		public static void ProcessGaze()
+		{
+			if (state == State.Strafing)
+			{
+				System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+				int centerX = (screenBounds.Right + screenBounds.Left) / 2;
+				int centerY = (screenBounds.Top + screenBounds.Bottom) / 2;
+
+				if (gazeX > (centerX + screenBounds.Right) / 2)
+				{
+					if (!keyDown)
+					{
+						keybd_event((byte)'D', 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+						keyDown = true;
+					}
+				}
+				else
+				{
+					if (keyDown)
+					{
+						keybd_event((byte)'D', 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+						keyDown = false;
+					}
+				}
+			}
+		}
+	}
 }

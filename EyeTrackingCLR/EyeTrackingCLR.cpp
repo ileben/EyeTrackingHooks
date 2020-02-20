@@ -132,6 +132,18 @@ extern "C"
 	{
 		return EyeTrackingHooks::EyeTracking::TeleportCursor();
 	}
+	
+	__declspec(dllexport)
+	void Strafe()
+	{
+		return EyeTrackingHooks::EyeTracking::Strafe();
+	}
+
+	__declspec(dllexport)
+	void StopMoving()
+	{
+		return EyeTrackingHooks::EyeTracking::StopMoving();
+	}
 
 	__declspec(dllexport)
 	const char * Test2()
