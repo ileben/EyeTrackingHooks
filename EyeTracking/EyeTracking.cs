@@ -341,6 +341,26 @@ namespace EyeTrackingHooks
 			state = State.None;
 		}
 
+		private static List<int> pressedKeys = new List<int>();
+
+		private static void PressKey(int key)
+		{
+			keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+			if (!pressedKeys.Contains(key))
+			{
+				pressedKeys.Add(key);
+			}
+		}
+
+		private static void ReleaseKey(int key)
+		{
+			if (pressedKeys.Contains(key))
+			{
+				keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+				pressedKeys.Remove(key);
+			}
+		}
+
 		public static void ProcessGaze()
 		{
 			if (state == State.Strafing)
@@ -350,21 +370,14 @@ namespace EyeTrackingHooks
 				int centerY = (screenBounds.Top + screenBounds.Bottom) / 2;
 
 				if (gazeX > (centerX + screenBounds.Right) / 2)
-				{
-					if (!keyDown)
-					{
-						keybd_event((byte)'D', 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
-						keyDown = true;
-					}
-				}
+					PressKey('D');
 				else
-				{
-					if (keyDown)
-					{
-						keybd_event((byte)'D', 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
-						keyDown = false;
-					}
-				}
+					ReleaseKey('D');
+
+				if (gazeX < (centerX + screenBounds.Left) / 2)
+					PressKey('A');
+				else
+					ReleaseKey('A');
 			}
 		}
 	}
