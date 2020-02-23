@@ -140,6 +140,12 @@ extern "C"
 	}
 
 	__declspec(dllexport)
+	void Orbit()
+	{
+		return EyeTrackingHooks::EyeTracking::Orbit();
+	}
+
+	__declspec(dllexport)
 	void StopMoving()
 	{
 		return EyeTrackingHooks::EyeTracking::StopMoving();
