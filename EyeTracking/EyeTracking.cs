@@ -15,23 +15,12 @@ namespace EyeTrackingHooks
 {
 	public class EyeTracking
     {
-		[DllImport("user32.dll")]
-		public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
-
-		const int VK_UP = 0x26; //up key
-		const int VK_DOWN = 0x28;  //down key
-		const int VK_LEFT = 0x25;
-		const int VK_RIGHT = 0x27;
-		const uint KEYEVENTF_KEYUP = 0x0002;
-		const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
-
 		enum State
 		{
 			None,
-			Strafing
+			Strafing,
+			Orbiting
 		}
-
-		static bool keyDown = false;
 
 		static Host host = null;
 
@@ -287,7 +276,6 @@ namespace EyeTrackingHooks
 			var x = await host.States.GetEyeTrackingDeviceStatusAsync();
 			string s = x.ToString();
 			await host.States.SetStateValueAsync("DeviceStatus", EyeTrackingDeviceStatus.TrackingPaused);
-			bool b = true;
 		}
 
 		public static void Disconnect()
@@ -333,19 +321,27 @@ namespace EyeTrackingHooks
 
 		public static void Strafe()
 		{
+			ReleaseAllKeys();
 			state = State.Strafing;
+		}
+
+		public static void Orbit()
+		{
+			ReleaseAllKeys();
+			state = State.Orbiting;
 		}
 
 		public static void StopMoving()
 		{
 			state = State.None;
+			ReleaseAllKeys();
 		}
 
 		private static List<int> pressedKeys = new List<int>();
 
 		private static void PressKey(int key)
 		{
-			keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+			Win32Input.PressKey(key);
 			if (!pressedKeys.Contains(key))
 			{
 				pressedKeys.Add(key);
@@ -356,28 +352,98 @@ namespace EyeTrackingHooks
 		{
 			if (pressedKeys.Contains(key))
 			{
-				keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+				Win32Input.ReleaseKey(key);
 				pressedKeys.Remove(key);
 			}
+		}
+
+		private static void ReleaseAllKeys()
+		{
+			foreach (int key in pressedKeys)
+			{
+				ReleaseKey(key);
+			}
+		}
+
+		private static int GetGazeZoneX(int zoneCount)
+		{
+			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+			int zoneSize = screenBounds.Width / zoneCount;
+			return (gazeX - screenBounds.Left) / zoneSize;
+		}
+
+		private static int GetGazeZoneY(int zoneCount)
+		{
+			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+			int zoneSize = screenBounds.Height / zoneCount;
+			return (gazeY - screenBounds.Top) / zoneSize;
+		}
+
+		private static Point GetGazeZone(int zoneCountX, int zoneCountY)
+		{
+			return new Point(GetGazeZoneX(zoneCountX), GetGazeZoneY(zoneCountY));
+		}
+
+		private static Point ScreenCenter()
+		{
+			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+			return new Point(
+				(screenBounds.Left + screenBounds.Right) / 2,
+				(screenBounds.Top + screenBounds.Bottom) / 2);
+		}
+
+		private static Point MovePoint(Point p, int x, int y)
+		{
+			return new Point(p.X + x, p.Y + y);
 		}
 
 		public static void ProcessGaze()
 		{
 			if (state == State.Strafing)
 			{
-				System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-				int centerX = (screenBounds.Right + screenBounds.Left) / 2;
-				int centerY = (screenBounds.Top + screenBounds.Bottom) / 2;
+				Point gazeZone = GetGazeZone(3, 3);
 
-				if (gazeX > (centerX + screenBounds.Right) / 2)
+				if (gazeZone.X == 2)
 					PressKey('D');
 				else
 					ReleaseKey('D');
 
-				if (gazeX < (centerX + screenBounds.Left) / 2)
+				if (gazeZone.X == 0)
 					PressKey('A');
 				else
 					ReleaseKey('A');
+
+				if (gazeZone.Y == 2)
+					PressKey('S');
+				else
+					ReleaseKey('S');
+
+				if (gazeZone.Y == 0)
+					PressKey('W');
+				else
+					ReleaseKey('W');
+			}
+			else if (state == State.Orbiting)
+			{
+				Point gazeZone = GetGazeZone(3, 3);
+				Point center = ScreenCenter();
+
+				if (gazeZone.X == 2)
+				{
+					Mouse.Drag(MouseButton.Right, center, 5, 0);
+				}
+				if (gazeZone.X == 0)
+				{
+					Mouse.Drag(MouseButton.Right, center, -5, 0);
+				}
+				if (gazeZone.Y == 2)
+				{
+					Mouse.Drag(MouseButton.Right, center, 0, 5);
+				}
+				if (gazeZone.Y == 0)
+				{
+					Mouse.Drag(MouseButton.Right, center, 0, -5);
+				}
 			}
 		}
 	}
