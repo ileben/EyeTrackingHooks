@@ -47,6 +47,9 @@ namespace EyeTrackingHooks
 		{
 			public float zoomFactor;
 
+			public int screenW;
+			public int screenH;
+
 			public int zoomW;
 			public int zoomH;
 			public int zoomX;
@@ -60,6 +63,9 @@ namespace EyeTrackingHooks
 			public ZoomBounds(int x, int y)
 			{
 				System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+				screenW = screenBounds.Width;
+				screenH = screenBounds.Height;
+
 				zoomFactor = 6;
 
 				zoomW = (int)(screenBounds.Width / zoomFactor);
@@ -83,6 +89,7 @@ namespace EyeTrackingHooks
 				// Just in case Zoom() happens on another thread
 				lock (bitmapLock)
 				{
+					//UpdateZoomBackground();
 					UpdateZoomBitmap();
 					base.OnPaint(e);
 				}
@@ -151,8 +158,11 @@ namespace EyeTrackingHooks
 			ZoomBounds z = zoomBounds;
 
 			Graphics g = Graphics.FromImage(zoomBackground);
-			g.CopyFromScreen(z.zoomX, z.zoomY, 0, 0,
-				new System.Drawing.Size(z.zoomW, z.zoomH),
+			//g.CopyFromScreen(z.zoomX, z.zoomY, 0, 0,
+				//new System.Drawing.Size(z.zoomW, z.zoomH),
+				//CopyPixelOperation.SourceCopy);
+			g.CopyFromScreen(0, 0, 0, 0,
+				new System.Drawing.Size(z.screenW, z.screenH),
 				CopyPixelOperation.SourceCopy);
 			g.Dispose();
 		}
@@ -162,8 +172,10 @@ namespace EyeTrackingHooks
 			ZoomBounds z = zoomBounds;
 
 			Graphics g = Graphics.FromImage(zoomBitmap);
-			g.DrawImage(zoomBackground, 0, 0);
-			
+			g.Clear(Color.Gray);
+			//g.DrawImage(zoomBackground, 0, 0);
+			g.DrawImage(zoomBackground, 0, 0, new System.Drawing.Rectangle(z.zoomX, z.zoomY, z.zoomW, z.zoomH), GraphicsUnit.Pixel);
+
 			float bX = (smoothX - z.bigX) / z.zoomFactor;
 			float bY = (smoothY - z.bigY) / z.zoomFactor;
 			g.DrawLine(Pens.Black, bX - 10, bY, bX + 10, bY);
@@ -189,6 +201,7 @@ namespace EyeTrackingHooks
 				zoomForm.Height = z.bigH;
 				zoomForm.FormBorderStyle = FormBorderStyle.None;
 				zoomForm.TopMost = true;
+				//zoomForm.Opacity = 0.7f;
 				zoomForm.FormClosed += OnZoomFormClosed;
 
 				zoomPicture = new ZoomPictureBox();
@@ -203,7 +216,8 @@ namespace EyeTrackingHooks
 			lock (bitmapLock)
 			{
 				zoomBitmap = new Bitmap(z.zoomW, z.zoomH);
-				zoomBackground = new Bitmap(z.zoomW, z.zoomH);
+				//zoomBackground = new Bitmap(z.zoomW, z.zoomH);
+				zoomBackground = new Bitmap(z.screenW, z.screenH);
 
 				UpdateZoomBackground();
 				UpdateZoomBitmap();
@@ -399,6 +413,29 @@ namespace EyeTrackingHooks
 
 		public static void ProcessGaze()
 		{
+			if (zoomForm != null &&
+				zoomForm.Visible)
+			{
+				Point gazeZone = GetGazeZone(4, 4);
+				int k = 1;
+
+				if (gazeZone.X == 3)
+				{
+					zoomBounds.zoomX += k;
+				}
+				if (gazeZone.X == 0)
+				{
+					zoomBounds.zoomX -= k;
+				}
+				if (gazeZone.Y == 3)
+				{
+					zoomBounds.zoomY += k;
+				}
+				if (gazeZone.Y == 0)
+				{
+					zoomBounds.zoomY -= k;
+				}
+			}
 			if (state == State.Strafing)
 			{
 				Point gazeZone = GetGazeZone(3, 3);
