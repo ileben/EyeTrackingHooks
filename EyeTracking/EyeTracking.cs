@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows;
 using System.Drawing;
+using System.Diagnostics;
+using System.Threading;
 using System.Runtime.InteropServices;
 
 using Tobii.Interaction;
@@ -39,6 +41,9 @@ namespace EyeTrackingHooks
 
 		static ZoomPictureBox zoomPicture = null;
 		static ZoomBounds zoomBounds = new ZoomBounds(0, 0);
+		static Stopwatch zoomStopwatch = new Stopwatch();
+		static List<Point> zoomGazeHistory = new List<Point>();
+		static bool zoomHighlight = false;
 
 		static State state = State.None;
 
@@ -122,8 +127,8 @@ namespace EyeTrackingHooks
 					float px = (float)gazeList[p].X;
 					float py = (float)gazeList[p].Y;
 					
-					if (px - endX <= 100.0f &&
-						py - endY <= 100.0f)
+					if (Math.Abs(px - endX) <= 100.0f &&
+						Math.Abs(py - endY) <= 100.0f)
 					{
 						avgX += (float)gazeList[p].X;
 						avgY += (float)gazeList[p].Y;
@@ -178,8 +183,9 @@ namespace EyeTrackingHooks
 
 			float bX = (smoothX - z.bigX) / z.zoomFactor;
 			float bY = (smoothY - z.bigY) / z.zoomFactor;
-			g.DrawLine(Pens.Black, bX - 10, bY, bX + 10, bY);
-			g.DrawLine(Pens.Black, bX, bY - 10, bX, bY + 10);
+			Pen crossPen = zoomHighlight ? Pens.Red: Pens.Black;
+			g.DrawLine(crossPen, bX - 10, bY, bX + 10, bY);
+			g.DrawLine(crossPen, bX, bY - 10, bX, bY + 10);
 			g.Dispose();
 		}
 
@@ -236,6 +242,8 @@ namespace EyeTrackingHooks
 			if (zoomForm != null)
 			{
 				zoomForm.Hide();
+				zoomStopwatch.Reset();
+				zoomHighlight = false;
 			}
 		}
 
@@ -416,8 +424,9 @@ namespace EyeTrackingHooks
 			if (zoomForm != null &&
 				zoomForm.Visible)
 			{
-				Point gazeZone = GetGazeZone(4, 4);
+				int z = 4;
 				int k = 1;
+				Point gazeZone = GetGazeZone(z, z);
 
 				if (gazeZone.X == 3)
 				{
@@ -434,6 +443,60 @@ namespace EyeTrackingHooks
 				if (gazeZone.Y == 0)
 				{
 					zoomBounds.zoomY -= k;
+				}
+				bool gazeIsSteady = false;
+				if ((gazeZone.X > 0 && gazeZone.X < z - 1) &&
+					(gazeZone.Y > 0 && gazeZone.Y < z - 1))
+				{
+					zoomGazeHistory.Add(GetZoomGaze());
+					while (zoomGazeHistory.Count > 10)
+					{
+						zoomGazeHistory.RemoveAt(0);
+					}
+					int minX = Int32.MaxValue;
+					int minY = Int32.MaxValue;
+					int maxX = Int32.MinValue;
+					int maxY = Int32.MinValue;
+					foreach (Point p in zoomGazeHistory)
+					{
+						minX = Math.Min(minX, p.X);
+						minY = Math.Min(minY, p.Y);
+						maxX = Math.Max(maxX, p.X);
+						maxY = Math.Max(maxY, p.Y);
+					}
+					int sizeX = maxX - minX;
+					int sizeY = maxY - minY;
+					if (sizeX <= 10 && sizeY <= 10)
+					{
+						gazeIsSteady = true;
+					}
+				}
+				if (gazeIsSteady)
+				{
+					int STEADY_THRESHOLD = 300;
+					int CLICK_THRESHOLD = 1000;
+					zoomStopwatch.Start();
+					long t = zoomStopwatch.ElapsedMilliseconds;
+					if (t > STEADY_THRESHOLD)
+					{
+						int BLINK_INTERVAL = 100;
+						zoomHighlight = (((t - STEADY_THRESHOLD) / BLINK_INTERVAL) % 2 == 1);
+						if (t > CLICK_THRESHOLD)
+						{
+							Unzoom();
+							followGaze = false;
+
+							// Click
+							Mouse.Press(MouseButton.Left, GetZoomGaze());
+							Thread.Sleep(200);
+							Mouse.Release(MouseButton.Left, GetZoomGaze());
+						}
+					}
+				}
+				else
+				{
+					zoomStopwatch.Reset();
+					zoomHighlight = false;
 				}
 			}
 			if (state == State.Strafing)
