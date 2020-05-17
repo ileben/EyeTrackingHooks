@@ -521,5 +521,52 @@ namespace EyeTrackingHooks
 				}
 			}
 		}
+
+		[DllImport("user32.dll")]
+		static extern IntPtr GetForegroundWindow();
+
+		[DllImport("user32.dll")]
+		static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
+		public static SHDocVw.InternetExplorer GetCurrentExplorerWindow()
+		{
+			IntPtr activeWindow = GetForegroundWindow();
+			try
+			{
+				// Required ref: SHDocVw (Microsoft Internet Controls COM Object)
+				SHDocVw.ShellWindows shellWindows = new SHDocVw.ShellWindows();
+
+				foreach (SHDocVw.InternetExplorer window in shellWindows)
+				{
+					if (window.HWND == (int)activeWindow)
+					{
+						return window;
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			return null;
+		}
+		public static string GetCurrentFile()
+		{
+			SHDocVw.InternetExplorer window = GetCurrentExplorerWindow();
+			if (window != null)
+			{
+				return window.Document.FocusedItem.Path;
+			}
+			return "";
+		}
+
+		public static string GetCurrentFolder()
+		{
+			SHDocVw.InternetExplorer window = GetCurrentExplorerWindow();
+			if (window != null)
+			{
+				return window.LocationURL.Replace("file:///", "");
+			}
+			return "";
+		}
 	}
 }

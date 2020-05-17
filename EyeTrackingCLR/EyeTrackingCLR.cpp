@@ -9,6 +9,7 @@ using namespace System::IO; // Path
 using namespace System::Reflection; // Assembly
 using namespace System::Windows::Forms;
 using namespace System::Windows::Input;
+using namespace System::Runtime::InteropServices;
 
 static String^ GetLocalAssemblyPath(String^ name)
 {
@@ -207,5 +208,23 @@ extern "C"
 		return s_string.c_str();
 		//String^ test = gcnew String(oss.str().c_str());
 		//MessageBox::Show(h.ToString());
+	}
+
+	__declspec(dllexport)
+	const char * GetCurrentFile()
+	{
+		String^ path = EyeTrackingHooks::EyeTracking::GetCurrentFile();
+		IntPtr ptrToNativeString = Marshal::StringToHGlobalAnsi(path);
+		s_string = (char*)ptrToNativeString.ToPointer();
+		return s_string.c_str();
+	}
+
+	__declspec(dllexport)
+	const char * GetCurrentFolder()
+	{
+		String^ path = EyeTrackingHooks::EyeTracking::GetCurrentFolder();
+		IntPtr ptrToNativeString = Marshal::StringToHGlobalAnsi(path);
+		s_string = (char*)ptrToNativeString.ToPointer();
+		return s_string.c_str();
 	}
 }
