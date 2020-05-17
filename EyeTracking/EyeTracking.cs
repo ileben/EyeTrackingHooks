@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows;
 using System.Drawing;
+using Size = System.Drawing.Size;
+using Rectangle = System.Drawing.Rectangle;
 using System.Diagnostics;
 using System.Threading;
 using System.Runtime.InteropServices;
@@ -41,6 +43,7 @@ namespace EyeTrackingHooks
 
 		static ZoomPictureBox zoomPicture = null;
 		static ZoomBounds zoomBounds = new ZoomBounds(0, 0);
+		static Stopwatch zoomSteadyStopwatch = new Stopwatch();
 		static Stopwatch zoomStopwatch = new Stopwatch();
 		static List<Point> zoomGazeHistory = new List<Point>();
 		static bool zoomHighlight = false;
@@ -67,7 +70,7 @@ namespace EyeTrackingHooks
 
 			public ZoomBounds(int x, int y)
 			{
-				System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+				Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
 				screenW = screenBounds.Width;
 				screenH = screenBounds.Height;
 
@@ -163,9 +166,6 @@ namespace EyeTrackingHooks
 			ZoomBounds z = zoomBounds;
 
 			Graphics g = Graphics.FromImage(zoomBackground);
-			//g.CopyFromScreen(z.zoomX, z.zoomY, 0, 0,
-				//new System.Drawing.Size(z.zoomW, z.zoomH),
-				//CopyPixelOperation.SourceCopy);
 			g.CopyFromScreen(0, 0, 0, 0,
 				new System.Drawing.Size(z.screenW, z.screenH),
 				CopyPixelOperation.SourceCopy);
@@ -178,7 +178,6 @@ namespace EyeTrackingHooks
 
 			Graphics g = Graphics.FromImage(zoomBitmap);
 			g.Clear(Color.Gray);
-			//g.DrawImage(zoomBackground, 0, 0);
 			g.DrawImage(zoomBackground, 0, 0, new System.Drawing.Rectangle(z.zoomX, z.zoomY, z.zoomW, z.zoomH), GraphicsUnit.Pixel);
 
 			float bX = (smoothX - z.bigX) / z.zoomFactor;
@@ -222,7 +221,6 @@ namespace EyeTrackingHooks
 			lock (bitmapLock)
 			{
 				zoomBitmap = new Bitmap(z.zoomW, z.zoomH);
-				//zoomBackground = new Bitmap(z.zoomW, z.zoomH);
 				zoomBackground = new Bitmap(z.screenW, z.screenH);
 
 				UpdateZoomBackground();
@@ -233,6 +231,7 @@ namespace EyeTrackingHooks
 			zoomForm.Show();
 			zoomForm.Left = z.bigX;
 			zoomForm.Top = z.bigY;
+			zoomStopwatch.Restart();
 
 			followGaze = true;
 		}
@@ -243,6 +242,7 @@ namespace EyeTrackingHooks
 			{
 				zoomForm.Hide();
 				zoomStopwatch.Reset();
+				zoomSteadyStopwatch.Reset();
 				zoomHighlight = false;
 			}
 		}
@@ -387,23 +387,9 @@ namespace EyeTrackingHooks
 			}
 		}
 
-		private static int GetGazeZoneX(int zoneCount)
+		private static GazeZone GetGazeZone(int zoneCountX, int zoneCountY)
 		{
-			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-			int zoneSize = screenBounds.Width / zoneCount;
-			return (gazeX - screenBounds.Left) / zoneSize;
-		}
-
-		private static int GetGazeZoneY(int zoneCount)
-		{
-			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-			int zoneSize = screenBounds.Height / zoneCount;
-			return (gazeY - screenBounds.Top) / zoneSize;
-		}
-
-		private static Point GetGazeZone(int zoneCountX, int zoneCountY)
-		{
-			return new Point(GetGazeZoneX(zoneCountX), GetGazeZoneY(zoneCountY));
+			return new GazeZone(zoneCountX, zoneCountY, new Point(gazeX, gazeY));
 		}
 
 		private static Point ScreenCenter()
@@ -424,125 +410,114 @@ namespace EyeTrackingHooks
 			if (zoomForm != null &&
 				zoomForm.Visible)
 			{
-				int z = 4;
-				int k = 1;
-				Point gazeZone = GetGazeZone(z, z);
+				int SCROLL_DELAY = 800;
+				if (zoomStopwatch.ElapsedMilliseconds > SCROLL_DELAY)
+				{
+					zoomStopwatch.Stop();
 
-				if (gazeZone.X == 3)
-				{
-					zoomBounds.zoomX += k;
-				}
-				if (gazeZone.X == 0)
-				{
-					zoomBounds.zoomX -= k;
-				}
-				if (gazeZone.Y == 3)
-				{
-					zoomBounds.zoomY += k;
-				}
-				if (gazeZone.Y == 0)
-				{
-					zoomBounds.zoomY -= k;
-				}
-				bool gazeIsSteady = false;
-				if ((gazeZone.X > 0 && gazeZone.X < z - 1) &&
-					(gazeZone.Y > 0 && gazeZone.Y < z - 1))
-				{
-					zoomGazeHistory.Add(GetZoomGaze());
-					while (zoomGazeHistory.Count > 10)
+					int z = 4;
+					int k = 1;
+					bool gazeIsSteady = false;
+					GazeZone gazeZone = GetGazeZone(z, z);
+
+					if (gazeZone.IsOnEdge())
 					{
-						zoomGazeHistory.RemoveAt(0);
+						zoomBounds.zoomX += gazeZone.GetHorizontalEdgeSign() * k;
+						zoomBounds.zoomY += gazeZone.GetVerticalEdgeSign() * k;
 					}
-					int minX = Int32.MaxValue;
-					int minY = Int32.MaxValue;
-					int maxX = Int32.MinValue;
-					int maxY = Int32.MinValue;
-					foreach (Point p in zoomGazeHistory)
+					else
 					{
-						minX = Math.Min(minX, p.X);
-						minY = Math.Min(minY, p.Y);
-						maxX = Math.Max(maxX, p.X);
-						maxY = Math.Max(maxY, p.Y);
-					}
-					int sizeX = maxX - minX;
-					int sizeY = maxY - minY;
-					if (sizeX <= 10 && sizeY <= 10)
-					{
-						gazeIsSteady = true;
-					}
-				}
-				if (gazeIsSteady)
-				{
-					int STEADY_THRESHOLD = 300;
-					int CLICK_THRESHOLD = 1000;
-					zoomStopwatch.Start();
-					long t = zoomStopwatch.ElapsedMilliseconds;
-					if (t > STEADY_THRESHOLD)
-					{
-						int BLINK_INTERVAL = 100;
-						zoomHighlight = (((t - STEADY_THRESHOLD) / BLINK_INTERVAL) % 2 == 1);
-						if (t > CLICK_THRESHOLD)
+						// Check whether the gaze moved much recently by calculating the extent of the
+						// bounding box of the recent few gaze positions 
+						zoomGazeHistory.Add(GetZoomGaze());
+						while (zoomGazeHistory.Count > 10)
 						{
-							Unzoom();
-							followGaze = false;
-
-							// Click
-							Mouse.Press(MouseButton.Left, GetZoomGaze());
-							Thread.Sleep(200);
-							Mouse.Release(MouseButton.Left, GetZoomGaze());
+							zoomGazeHistory.RemoveAt(0);
+						}
+						int minX = Int32.MaxValue;
+						int minY = Int32.MaxValue;
+						int maxX = Int32.MinValue;
+						int maxY = Int32.MinValue;
+						foreach (Point p in zoomGazeHistory)
+						{
+							minX = Math.Min(minX, p.X);
+							minY = Math.Min(minY, p.Y);
+							maxX = Math.Max(maxX, p.X);
+							maxY = Math.Max(maxY, p.Y);
+						}
+						int sizeX = maxX - minX;
+						int sizeY = maxY - minY;
+						if (sizeX <= 10 && sizeY <= 10)
+						{
+							gazeIsSteady = true;
 						}
 					}
-				}
-				else
-				{
-					zoomStopwatch.Reset();
-					zoomHighlight = false;
+					if (gazeIsSteady)
+					{
+						int STEADY_THRESHOLD = 300;
+						int CLICK_THRESHOLD = 1000;
+
+						// First wait for the gaze to be steady for a while
+						zoomSteadyStopwatch.Start();
+						long t = zoomSteadyStopwatch.ElapsedMilliseconds;
+						if (t > STEADY_THRESHOLD)
+						{
+							// Then blink for a while before automatically clicking
+							int BLINK_INTERVAL = 100;
+							zoomHighlight = (((t - STEADY_THRESHOLD) / BLINK_INTERVAL) % 2 == 1);
+							if (t > CLICK_THRESHOLD)
+							{
+								Unzoom();
+								followGaze = false;
+
+								// Click
+								Mouse.Press(MouseButton.Left, GetZoomGaze());
+								Thread.Sleep(200);
+								Mouse.Release(MouseButton.Left, GetZoomGaze());
+							}
+						}
+					}
+					else
+					{
+						zoomSteadyStopwatch.Reset();
+						zoomHighlight = false;
+					}
 				}
 			}
 			if (state == State.Strafing)
 			{
-				Point gazeZone = GetGazeZone(3, 3);
+				GazeZone gazeZone = GetGazeZone(3, 3);
 
-				if (gazeZone.X == 2)
+				if (gazeZone.IsOnRightEdge())
 					PressKey('D');
 				else
 					ReleaseKey('D');
 
-				if (gazeZone.X == 0)
+				if (gazeZone.IsOnLeftEdge())
 					PressKey('A');
 				else
 					ReleaseKey('A');
 
-				if (gazeZone.Y == 2)
+				if (gazeZone.IsOnBottomEdge())
 					PressKey('S');
 				else
 					ReleaseKey('S');
 
-				if (gazeZone.Y == 0)
+				if (gazeZone.IsOnTopEdge())
 					PressKey('W');
 				else
 					ReleaseKey('W');
 			}
 			else if (state == State.Orbiting)
 			{
-				Point gazeZone = GetGazeZone(3, 3);
+				GazeZone gazeZone = GetGazeZone(3, 3);
 				Point center = ScreenCenter();
 
-				if (gazeZone.X == 2)
+				if (gazeZone.IsOnEdge())
 				{
-					Mouse.Drag(MouseButton.Right, center, 5, 0);
-				}
-				if (gazeZone.X == 0)
-				{
-					Mouse.Drag(MouseButton.Right, center, -5, 0);
-				}
-				if (gazeZone.Y == 2)
-				{
-					Mouse.Drag(MouseButton.Right, center, 0, 5);
-				}
-				if (gazeZone.Y == 0)
-				{
-					Mouse.Drag(MouseButton.Right, center, 0, -5);
+					int k = 5;
+					Point d = gazeZone.GetEdgeSign();
+					Mouse.Drag(MouseButton.Right, center, d.X*k, d.Y*k);
 				}
 			}
 		}
