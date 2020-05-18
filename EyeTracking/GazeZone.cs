@@ -28,22 +28,22 @@ namespace EyeTrackingHooks
 
 		public bool IsOnLeftEdge()
 		{
-			return position.X == 0;
+			return position.X <= 0;
 		}
 
 		public bool IsOnRightEdge()
 		{
-			return position.X == count.X - 1;
+			return position.X >= count.X - 1;
 		}
 
 		public bool IsOnTopEdge()
 		{
-			return position.Y == 0;
+			return position.Y <= 0;
 		}
 
 		public bool IsOnBottomEdge()
 		{
-			return position.Y == count.Y - 1;
+			return position.Y >= count.Y - 1;
 		}
 
 		public bool IsOnEdge()

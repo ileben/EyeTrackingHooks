@@ -73,54 +73,54 @@ namespace EyeTrackingHooks
 
 				zoomFactor = 6;
 
-				// First decide how much screen real estate we should allocate to the zoomed in picture 
-				GazeZone z = new GazeZone(3, 3, new Point(gazeX, gazeY), screenBounds);
+				// Try to find a rectangle on the side of the zoom point with the largest area, 
+				// to maximize the size of the blown up picture without obscuring the zoom area.
+				// We want a clearing around the zoom point of at least a quarter of the screen.
+				int clearing = Math.Min(screenW, screenH) / 4;
 
-				int w = screenW;
-				int w3 = screenW / 3;
-				int w23 = screenW * 2 / 3;
+				int leftEdge = x - clearing;
+				int rightEdge = x + clearing;
+				int topEdge = y - clearing;
+				int bottomEdge = y + clearing;
 
-				int h = screenH;
-				int h3 = screenH / 3;
-				int h23 = screenH * 2 / 3;
+				int leftSize = leftEdge - screenBounds.Left;
+				int rightSize = screenBounds.Right - rightEdge;
+				int topSize = topEdge - screenBounds.Top;
+				int bottomSize = screenBounds.Bottom - bottomEdge;
 
+				int leftArea = leftSize * screenBounds.Height;
+				int rightArea = rightSize * screenBounds.Height;
+				int topArea = topSize * screenBounds.Width;
+				int bottomArea = bottomSize * screenBounds.Width;
 
-				if (z.IsOnLeftEdge())
-				{
-					big.Width = w23;
-					big.Height = h;
-					big.X = w3;
-					big.Y = 0;
-				}
-				else if (z.IsOnRightEdge())
-				{
-					big.Width = w23;
-					big.Height = h;
-					big.X = 0;
-					big.Y = 0;
-				}
-				else if (z.IsOnTopEdge())
-				{
-					big.Width = w;
-					big.Height = h23;
-					big.X = 0;
-					big.Y = h3;
-				}
-				else if (z.IsOnBottomEdge())
-				{
-					big.Width = w;
-					big.Height = h23;
-					big.X = 0;
-					big.Y = 0;
-				}
-				else
-				{
-					big.Width = w;
-					big.Height = h3;
-					big.X = 0;
-					big.Y = h23;
-				}
+				int largest = leftArea;
+				big = new Rectangle(
+					screenBounds.Left, screenBounds.Top,
+					leftSize, screenBounds.Height);
 
+				if (rightArea > largest)
+				{
+					largest = rightArea;
+					big = new Rectangle(
+						rightEdge, screenBounds.Top,
+						rightSize, screenBounds.Height);
+				}
+				if (rightArea > largest)
+				{
+					largest = topArea;
+					big = new Rectangle(
+						screenBounds.Left, screenBounds.Top,
+						screenBounds.Width, topSize);
+				}
+				if (rightArea > largest)
+				{
+					largest = bottomArea;
+					big = new Rectangle(
+						screenBounds.Left, bottomEdge,
+						screenBounds.Width, bottomSize);
+				}
+				
+				// Now construct the source rectangle of the same aspect ratio centered on the zoom point
 				source.Width = (int)(big.Width / zoomFactor);
 				source.Height = (int)(big.Height / zoomFactor);
 
