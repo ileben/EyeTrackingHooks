@@ -10,14 +10,13 @@ namespace EyeTrackingHooks
 {
 	public struct GazeZone
 	{
-		Point count;
-		Point position;
+		public Point count;
+		public Point position;
 
-		public GazeZone(int zoneCountX, int zoneCountY, Point screenPosition)
+		public GazeZone(int zoneCountX, int zoneCountY, Point screenPosition, Rectangle screenBounds)
 		{
 			count = new Point(zoneCountX, zoneCountY);
 
-			Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
 			int zoneSizeX = screenBounds.Width / zoneCountX;
 			int x = (screenPosition.X - screenBounds.Left) / zoneSizeX;
 

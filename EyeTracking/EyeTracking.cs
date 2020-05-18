@@ -11,6 +11,8 @@ using Rectangle = System.Drawing.Rectangle;
 using System.Diagnostics;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Timers;
+using Timer = System.Timers.Timer;
 
 using Tobii.Interaction;
 using Tobii.Interaction.Framework;
@@ -47,6 +49,8 @@ namespace EyeTrackingHooks
 		static Stopwatch zoomStopwatch = new Stopwatch();
 		static List<Point> zoomGazeHistory = new List<Point>();
 		static bool zoomHighlight = false;
+		static Timer zoomUpdateTimer = new Timer(500);
+		static int ZOOM_CURSOR_DELAY = 800;
 
 		static State state = State.None;
 
@@ -58,15 +62,8 @@ namespace EyeTrackingHooks
 			public int screenW;
 			public int screenH;
 
-			public int zoomW;
-			public int zoomH;
-			public int zoomX;
-			public int zoomY;
-
-			public int bigW;
-			public int bigH;
-			public int bigX;
-			public int bigY;
+			public Rectangle source = new Rectangle();
+			public Rectangle big = new Rectangle();
 
 			public ZoomBounds(int x, int y)
 			{
@@ -76,17 +73,59 @@ namespace EyeTrackingHooks
 
 				zoomFactor = 6;
 
-				zoomW = (int)(screenBounds.Width / zoomFactor);
-				zoomH = (int)(screenBounds.Height / zoomFactor);
+				// First decide how much screen real estate we should allocate to the zoomed in picture 
+				GazeZone z = new GazeZone(3, 3, new Point(gazeX, gazeY), screenBounds);
 
-				zoomX = x - zoomW / 2;
-				zoomY = y - zoomH / 2;
+				int w = screenW;
+				int w3 = screenW / 3;
+				int w23 = screenW * 2 / 3;
 
-				bigW = (int)(zoomW * zoomFactor);
-				bigH = (int)(zoomH * zoomFactor);
+				int h = screenH;
+				int h3 = screenH / 3;
+				int h23 = screenH * 2 / 3;
 
-				bigX = (screenBounds.Right + screenBounds.Left) / 2 - bigW / 2;
-				bigY = (screenBounds.Bottom + screenBounds.Top) / 2 - bigH / 2;
+
+				if (z.IsOnLeftEdge())
+				{
+					big.Width = w23;
+					big.Height = h;
+					big.X = w3;
+					big.Y = 0;
+				}
+				else if (z.IsOnRightEdge())
+				{
+					big.Width = w23;
+					big.Height = h;
+					big.X = 0;
+					big.Y = 0;
+				}
+				else if (z.IsOnTopEdge())
+				{
+					big.Width = w;
+					big.Height = h23;
+					big.X = 0;
+					big.Y = h3;
+				}
+				else if (z.IsOnBottomEdge())
+				{
+					big.Width = w;
+					big.Height = h23;
+					big.X = 0;
+					big.Y = 0;
+				}
+				else
+				{
+					big.Width = w;
+					big.Height = h3;
+					big.X = 0;
+					big.Y = h23;
+				}
+
+				source.Width = (int)(big.Width / zoomFactor);
+				source.Height = (int)(big.Height / zoomFactor);
+
+				source.X = x - source.Width / 2;
+				source.Y = y - source.Height / 2;
 			}
 		}
 
@@ -97,7 +136,7 @@ namespace EyeTrackingHooks
 				// Just in case Zoom() happens on another thread
 				lock (bitmapLock)
 				{
-					//UpdateZoomBackground();
+					UpdateZoomBackground();
 					UpdateZoomBitmap();
 					base.OnPaint(e);
 				}
@@ -147,9 +186,16 @@ namespace EyeTrackingHooks
 				if (zoomForm != null &&
 					zoomForm.Visible)
 				{
-					// If currently zooming, use translated zoom position
-					System.Windows.Forms.Cursor.Position = GetZoomGaze();
-					zoomPicture.Invalidate();
+					// When they start zooming, wait for a bit before moving the cursor
+					// so the eyes can settle on the blown up picture
+					if (zoomStopwatch.ElapsedMilliseconds > ZOOM_CURSOR_DELAY)
+					{
+						zoomStopwatch.Stop();
+
+						// If currently zooming, use translated zoom position
+						System.Windows.Forms.Cursor.Position = GetZoomGaze();
+						zoomPicture.Invalidate();
+					}
 				}
 				else
 				{
@@ -178,10 +224,10 @@ namespace EyeTrackingHooks
 
 			Graphics g = Graphics.FromImage(zoomBitmap);
 			g.Clear(Color.Gray);
-			g.DrawImage(zoomBackground, 0, 0, new System.Drawing.Rectangle(z.zoomX, z.zoomY, z.zoomW, z.zoomH), GraphicsUnit.Pixel);
+			g.DrawImage(zoomBackground, 0, 0, z.source, GraphicsUnit.Pixel);
 
-			float bX = (smoothX - z.bigX) / z.zoomFactor;
-			float bY = (smoothY - z.bigY) / z.zoomFactor;
+			float bX = (smoothX - z.big.X) / z.zoomFactor;
+			float bY = (smoothY - z.big.Y) / z.zoomFactor;
 			Pen crossPen = zoomHighlight ? Pens.Red: Pens.Black;
 			g.DrawLine(crossPen, bX - 10, bY, bX + 10, bY);
 			g.DrawLine(crossPen, bX, bY - 10, bX, bY + 10);
@@ -202,25 +248,33 @@ namespace EyeTrackingHooks
 			{
 				zoomForm = new Form();
 				zoomForm.Text = "Zoom";
-				zoomForm.Width = z.bigW;
-				zoomForm.Height = z.bigH;
 				zoomForm.FormBorderStyle = FormBorderStyle.None;
 				zoomForm.TopMost = true;
 				//zoomForm.Opacity = 0.7f;
+				//zoomForm.TransparencyKey = Color.Red;
 				zoomForm.FormClosed += OnZoomFormClosed;
 
 				zoomPicture = new ZoomPictureBox();
 				zoomPicture.Parent = zoomForm;
 				zoomPicture.SizeMode = PictureBoxSizeMode.StretchImage;
-				zoomPicture.Width = z.bigW;
-				zoomPicture.Height = z.bigH;
 			}
+
+			zoomForm.Width = z.big.Width;
+			zoomForm.Height = z.big.Height;
+			zoomPicture.Width = z.big.Width;
+			zoomPicture.Height = z.big.Height;
 
 			zoomForm.Hide();
 
 			lock (bitmapLock)
 			{
-				zoomBitmap = new Bitmap(z.zoomW, z.zoomH);
+				if (zoomBitmap != null)
+				{
+					zoomBitmap.Dispose();
+					zoomBackground.Dispose();
+				}
+
+				zoomBitmap = new Bitmap(z.source.Width, z.source.Height);
 				zoomBackground = new Bitmap(z.screenW, z.screenH);
 
 				UpdateZoomBackground();
@@ -229,11 +283,26 @@ namespace EyeTrackingHooks
 
 			zoomPicture.Image = zoomBitmap;
 			zoomForm.Show();
-			zoomForm.Left = z.bigX;
-			zoomForm.Top = z.bigY;
+			zoomForm.Left = z.big.X;
+			zoomForm.Top = z.big.Y;
 			zoomStopwatch.Restart();
 
+			//zoomUpdateTimer.Elapsed += OnZoomUpdate;
+			//zoomUpdateTimer.AutoReset = true;
+			//zoomUpdateTimer.Enabled = true;
+
 			followGaze = true;
+		}
+
+		static public void OnZoomUpdate(Object source, ElapsedEventArgs e)
+		{
+			if (zoomForm != null &&
+				zoomForm.Visible)
+			{
+				zoomForm.Opacity = 0;
+				UpdateZoomBackground();
+				zoomForm.Opacity = 1;
+			}
 		}
 
 		static public void Unzoom()
@@ -244,14 +313,15 @@ namespace EyeTrackingHooks
 				zoomStopwatch.Reset();
 				zoomSteadyStopwatch.Reset();
 				zoomHighlight = false;
+				zoomUpdateTimer.Enabled = false;
 			}
 		}
 
 		static public Point GetZoomGaze()
 		{
 			ZoomBounds z = zoomBounds;
-			float screenX = z.zoomX + (smoothX - z.bigX) / z.zoomFactor;
-			float screenY = z.zoomY + (smoothY - z.bigY) / z.zoomFactor;
+			float screenX = z.source.X + (smoothX - z.big.X) / z.zoomFactor;
+			float screenY = z.source.Y + (smoothY - z.big.Y) / z.zoomFactor;
 			return new Point((int)screenX, (int)screenY);
 		}
 
@@ -389,7 +459,7 @@ namespace EyeTrackingHooks
 
 		private static GazeZone GetGazeZone(int zoneCountX, int zoneCountY)
 		{
-			return new GazeZone(zoneCountX, zoneCountY, new Point(gazeX, gazeY));
+			return new GazeZone(zoneCountX, zoneCountY, new Point(gazeX, gazeY), zoomBounds.big);
 		}
 
 		private static Point ScreenCenter()
@@ -410,11 +480,8 @@ namespace EyeTrackingHooks
 			if (zoomForm != null &&
 				zoomForm.Visible)
 			{
-				int SCROLL_DELAY = 800;
-				if (zoomStopwatch.ElapsedMilliseconds > SCROLL_DELAY)
+				if (zoomStopwatch.ElapsedMilliseconds > ZOOM_CURSOR_DELAY)
 				{
-					zoomStopwatch.Stop();
-
 					int z = 4;
 					int k = 1;
 					bool gazeIsSteady = false;
@@ -422,8 +489,8 @@ namespace EyeTrackingHooks
 
 					if (gazeZone.IsOnEdge())
 					{
-						zoomBounds.zoomX += gazeZone.GetHorizontalEdgeSign() * k;
-						zoomBounds.zoomY += gazeZone.GetVerticalEdgeSign() * k;
+						zoomBounds.source.X += gazeZone.GetHorizontalEdgeSign() * k;
+						zoomBounds.source.Y += gazeZone.GetVerticalEdgeSign() * k;
 					}
 					else
 					{
