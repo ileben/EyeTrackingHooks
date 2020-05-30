@@ -3,3 +3,5 @@ Debug
 Release
 x64
 *.user
+obj
+bin

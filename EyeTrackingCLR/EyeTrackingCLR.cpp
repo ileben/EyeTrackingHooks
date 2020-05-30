@@ -29,10 +29,11 @@ static Assembly^ AssemblyResolve(Object^ Sender, ResolveEventArgs^ args)
  
 	//MessageBox::Show("DLL: " + assemblyName->Name);
 
-	if (assemblyName->Name == "EyeTracking" ||
-		assemblyName->Name == "Tobii.Interaction.Net" ||
-		assemblyName->Name == "Tobii.Interaction.Model" ||
-		assemblyName->Name == "Tobii.EyeX.Client")
+	//if (assemblyName->Name == "Tesseract" ||
+	//	assemblyName->Name == "EyeTracking" ||
+	//	assemblyName->Name == "Tobii.Interaction.Net" ||
+	//	assemblyName->Name == "Tobii.Interaction.Model" ||
+	//	assemblyName->Name == "Tobii.EyeX.Client")
     {
 		String^ assemblyPath = GetLocalAssemblyPath(assemblyName->Name + ".dll");
 		//MessageBox::Show("Assembly path: " + assemblyPath);
@@ -42,7 +43,7 @@ static Assembly^ AssemblyResolve(Object^ Sender, ResolveEventArgs^ args)
 		}
 		catch (Exception^ e)
 		{
-			MessageBox::Show("Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
+			MessageBox::Show("Failed to loads assembly " + assemblyPath + "\nException:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
 		}
     }
 
@@ -153,6 +154,18 @@ extern "C"
 	}
 
 	__declspec(dllexport)
+		void InitCharacterRecognition()
+	{
+		EyeTrackingHooks::EyeTracking::InitCharacterRecognition();
+	}
+
+	__declspec(dllexport)
+		void TestText()
+	{
+		EyeTrackingHooks::EyeTracking::TestText();
+	}
+
+	__declspec(dllexport)
 	const char * Test2()
 	{
 		System::Windows::IInputElement^ input = Keyboard::FocusedElement;
@@ -208,6 +221,25 @@ extern "C"
 		return s_string.c_str();
 		//String^ test = gcnew String(oss.str().c_str());
 		//MessageBox::Show(h.ToString());
+	}
+
+	__declspec(dllexport)
+	const char * ClickText(const char * searchWord)
+	{
+		try
+		{
+			String^ searchString = gcnew String(searchWord);
+			EyeTrackingHooks::EyeTracking::ClickText(searchString);
+			return "";
+		}
+		catch (Exception^ e)
+		{
+			//MessageBox::Show("Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
+			String^ result = "Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace;
+			IntPtr ptrToNativeString = Marshal::StringToHGlobalAnsi(result);
+			s_string = (char*)ptrToNativeString.ToPointer();
+			return s_string.c_str();
+		}
 	}
 
 	__declspec(dllexport)

@@ -2,15 +2,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows;
+using System.Windows.Threading;
 using System.Drawing;
 using Size = System.Drawing.Size;
 using Rectangle = System.Drawing.Rectangle;
 using System.Diagnostics;
-using System.Threading;
 using System.Runtime.InteropServices;
+using System.Reflection;
+using System.IO;
 using System.Timers;
 using Timer = System.Timers.Timer;
 
@@ -52,7 +55,14 @@ namespace EyeTrackingHooks
 		static Timer zoomUpdateTimer = new Timer(500);
 		static int ZOOM_CURSOR_DELAY = 800;
 
+		static OcrForm ocrForm = null;
+		static OcrEngineWindows ocrEngineWindows = null;
+		static OcrEngineTesseract ocrEngineTesseract = null;
+		static IOcrEngine ocrEngine = null;
+
 		static State state = State.None;
+		static Thread mainFormThread = null;
+		static Form mainForm = null;
 
 		// Zoom source and destination rectangles
 		class ZoomBounds
@@ -134,7 +144,7 @@ namespace EyeTrackingHooks
 			protected override void OnPaint(PaintEventArgs e)
 			{
 				// Just in case Zoom() happens on another thread
-				lock (bitmapLock)
+				//lock (bitmapLock)
 				{
 					UpdateZoomBackground();
 					UpdateZoomBitmap();
@@ -243,54 +253,57 @@ namespace EyeTrackingHooks
 		{
 			ZoomBounds z = new ZoomBounds(gazeX, gazeY);
 			zoomBounds = z;
-			
-			if (zoomForm == null)
+
+			mainForm.Invoke((Action)(() =>
 			{
-				zoomForm = new Form();
-				zoomForm.Text = "Zoom";
-				zoomForm.FormBorderStyle = FormBorderStyle.None;
-				zoomForm.TopMost = true;
-				//zoomForm.Opacity = 0.7f;
-				//zoomForm.TransparencyKey = Color.Red;
-				zoomForm.FormClosed += OnZoomFormClosed;
-
-				zoomPicture = new ZoomPictureBox();
-				zoomPicture.Parent = zoomForm;
-				zoomPicture.SizeMode = PictureBoxSizeMode.StretchImage;
-			}
-
-			zoomForm.Width = z.big.Width;
-			zoomForm.Height = z.big.Height;
-			zoomPicture.Width = z.big.Width;
-			zoomPicture.Height = z.big.Height;
-
-			zoomForm.Hide();
-
-			lock (bitmapLock)
-			{
-				if (zoomBitmap != null)
+				if (zoomForm == null)
 				{
-					zoomBitmap.Dispose();
-					zoomBackground.Dispose();
+					zoomForm = new Form();
+					zoomForm.Text = "Zoom";
+					zoomForm.FormBorderStyle = FormBorderStyle.None;
+					zoomForm.ShowInTaskbar = false;
+					zoomForm.TopMost = true;
+					//zoomForm.Opacity = 0.7f;
+					//zoomForm.TransparencyKey = Color.Red;
+					zoomForm.FormClosed += OnZoomFormClosed;
+
+					zoomPicture = new ZoomPictureBox();
+					zoomPicture.Parent = zoomForm;
+					zoomPicture.SizeMode = PictureBoxSizeMode.StretchImage;
 				}
 
-				zoomBitmap = new Bitmap(z.source.Width, z.source.Height);
-				zoomBackground = new Bitmap(z.screenW, z.screenH);
+				zoomForm.Width = z.big.Width;
+				zoomForm.Height = z.big.Height;
+				zoomPicture.Width = z.big.Width;
+				zoomPicture.Height = z.big.Height;
 
-				UpdateZoomBackground();
-				UpdateZoomBitmap();
-			}
+				zoomForm.Hide();
 
-			zoomPicture.Image = zoomBitmap;
-			zoomForm.Show();
-			zoomForm.Left = z.big.X;
-			zoomForm.Top = z.big.Y;
-			zoomStopwatch.Restart();
+				//lock (bitmapLock)
+				{
+					if (zoomBitmap != null)
+					{
+						zoomBitmap.Dispose();
+						zoomBackground.Dispose();
+					}
 
-			//zoomUpdateTimer.Elapsed += OnZoomUpdate;
-			//zoomUpdateTimer.AutoReset = true;
-			//zoomUpdateTimer.Enabled = true;
+					zoomBitmap = new Bitmap(z.source.Width, z.source.Height);
+					zoomBackground = new Bitmap(z.screenW, z.screenH);
 
+					UpdateZoomBackground();
+					UpdateZoomBitmap();
+				}
+
+				zoomPicture.Image = zoomBitmap;
+				zoomForm.Show();
+				zoomForm.Left = z.big.X;
+				zoomForm.Top = z.big.Y;
+				zoomStopwatch.Restart();
+
+				//zoomUpdateTimer.Elapsed += OnZoomUpdate;
+				//zoomUpdateTimer.AutoReset = true;
+				//zoomUpdateTimer.Enabled = true;
+			}));
 			followGaze = true;
 		}
 
@@ -341,6 +354,22 @@ namespace EyeTrackingHooks
 		{
 			if (host != null)
 				return;
+
+			// We don't want to rely on an existing message loop to be able to show forms.
+			// so we start on new thread running its own message loop. We want to be able
+			// to reuse this thread to avoid overhead. However, the only way to make the
+			// thread execute more code to .Show another form is to send a message to it
+			// or .Invoke on an existing control.
+			mainForm = new Form();
+			mainForm.FormBorderStyle = FormBorderStyle.None;
+			mainForm.ShowInTaskbar = false;
+			mainFormThread = new Thread(() => {
+				mainForm.Show();
+				mainForm.Hide();
+				Application.Run();
+			});
+			mainFormThread.SetApartmentState(ApartmentState.STA);
+			mainFormThread.Start();
 
 			// Everything starts with initializing Host, which manages connection to the 
 			// Tobii Engine and provides all the Tobii Core SDK functionality.
@@ -587,6 +616,97 @@ namespace EyeTrackingHooks
 					Mouse.Drag(MouseButton.Right, center, d.X*k, d.Y*k);
 				}
 			}
+		}
+
+		public static void InitCharacterRecognition()
+		{
+			//ocrEngineTesseract = new OcrEngineTesseract();
+			ocrEngineWindows = new OcrEngineWindows();
+			ocrEngine = ocrEngineWindows;
+		}
+
+		public static void TestText()
+		{
+			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+			//RecognizeText(screenBounds.Width / 4, screenBounds.Height / 4, new Size(200, 200));
+			Point result;
+			RecognizeText(gazeX, gazeY, new Size(300, 300), "", out result);
+		}
+
+		public static void ClickText(string text)
+		{
+			Point hitPoint;
+			if (RecognizeText(gazeX, gazeY, new Size(500, 500), text, out hitPoint))
+			{
+				Mouse.Move(hitPoint);
+				Mouse.Press(MouseButton.Left, hitPoint);
+				Thread.Sleep(200);
+				Mouse.Release(MouseButton.Left, hitPoint);
+			}
+		}
+
+		public static void OnOcrFormClosed(Object sender, FormClosedEventArgs e)
+		{
+			ocrForm = null;
+		}
+
+		public static bool RecognizeText(int x, int y, Size regionSize, string searchWord, out Point hitPoint)
+		{
+			bool result = false;
+			hitPoint = new Point(0, 0);
+			if (ocrEngine == null)
+			{
+				return result;
+			}
+
+			Point origin = new Point(x - regionSize.Width / 2, y - regionSize.Height / 2);
+			Bitmap b = new Bitmap(regionSize.Width, regionSize.Height);
+			Graphics g = Graphics.FromImage(b);
+			g.CopyFromScreen(origin.X, origin.Y, 0, 0, regionSize, CopyPixelOperation.SourceCopy);
+			g.Dispose();
+
+			//b = new Bitmap(Image.FromFile("Capture.JPG"));
+
+			Point imageLocalPoint;
+			IOcrResult ocrResult = ocrEngine.Recognize(b);
+			if (ocrResult.FindWord(searchWord, out imageLocalPoint))
+			{
+				hitPoint = new Point(origin.X + imageLocalPoint.X, origin.Y + imageLocalPoint.Y);
+				result = true;
+			}
+
+			string text = "Search word: '" + searchWord + "'\r\n";
+			text += ocrResult.GetDebugText();
+
+			ocrResult.Dispose();
+						
+			mainForm.Invoke((Action)(() =>
+			{
+				if (ocrForm == null)
+				{
+					ocrForm = new OcrForm();
+					ocrForm.FormClosed += OnOcrFormClosed;
+				}
+
+				if (ocrForm.ocrPicture.Image != null)
+				{
+					ocrForm.ocrPicture.Image.Dispose();
+				}
+				ocrForm.ocrPicture.Image = b;
+				ocrForm.ocrText.Text = text;
+				
+				bool wasVisible = ocrForm.Visible;
+				ocrForm.Hide();
+				ocrForm.Show();
+				if (!wasVisible)
+				{
+					System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+					ocrForm.Left = screenBounds.Right - ocrForm.Width;
+					ocrForm.Top = screenBounds.Top;
+				}
+			}));
+
+			return result;
 		}
 
 		[DllImport("user32.dll")]
