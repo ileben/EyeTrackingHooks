@@ -630,7 +630,7 @@ namespace EyeTrackingHooks
 			System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
 			//RecognizeText(screenBounds.Width / 4, screenBounds.Height / 4, new Size(200, 200));
 			Point result;
-			RecognizeText(gazeX, gazeY, new Size(300, 300), "", out result);
+			RecognizeText(gazeX, gazeY, new Size(300, 300), "testing", out result);
 		}
 
 		public static void ClickText(string text)
@@ -669,11 +669,25 @@ namespace EyeTrackingHooks
 
 			Point imageLocalPoint;
 			IOcrResult ocrResult = ocrEngine.Recognize(b);
-			if (ocrResult.FindWord(searchWord, out imageLocalPoint))
+
+			// Try finding variations of the search word for all common mis-recognitions
+			List<string> variations = new List<string>();
+			variations.Add(searchWord);
+			if (searchWord.ToLower().Contains('l'))
+				variations.Add(searchWord.ToLower().Replace('l', 'I'));
+			if (searchWord.ToUpper().Contains('O'))
+				variations.Add(searchWord.ToUpper().Replace('O', '0'));
+
+			foreach (string v in variations)
 			{
-				hitPoint = new Point(origin.X + imageLocalPoint.X, origin.Y + imageLocalPoint.Y);
-				result = true;
+				if (ocrResult.FindWord(v, out imageLocalPoint))
+				{
+					hitPoint = new Point(origin.X + imageLocalPoint.X, origin.Y + imageLocalPoint.Y);
+					result = true;
+					break;
+				}
 			}
+
 
 			string text = "Search word: '" + searchWord + "'\r\n";
 			text += ocrResult.GetDebugText();
