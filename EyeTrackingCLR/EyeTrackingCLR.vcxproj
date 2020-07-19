@@ -78,12 +78,14 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -104,6 +106,10 @@
     <Link>
       <AdditionalDependencies />
     </Link>
+    <PostBuildEvent>
+      <Command>rem Visual studio fails to copy the correct version of this dll from the packages folder for the 64bit build so we do it manually 
+xcopy /y $(SolutionDir)EyeTracking\lib\x64\Tobii.EyeX.Client.dll $(OutputPath)Tobii.EyeX.Client.dll</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -122,6 +128,10 @@
     <Link>
       <AdditionalDependencies />
     </Link>
+    <PostBuildEvent>
+      <Command>rem Visual studio fails to copy the correct version of this dll from the packages folder for the 64bit build so we do it manually 
+xcopy /y $(SolutionDir)EyeTracking\lib\x64\Tobii.EyeX.Client.dll $(OutputPath)Tobii.EyeX.Client.dll</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="EyeTrackingCLR.h" />

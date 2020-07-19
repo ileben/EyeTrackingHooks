@@ -355,40 +355,48 @@ namespace EyeTrackingHooks
 			if (host != null)
 				return;
 
-			// We don't want to rely on an existing message loop to be able to show forms.
-			// so we start on new thread running its own message loop. We want to be able
-			// to reuse this thread to avoid overhead. However, the only way to make the
-			// thread execute more code to .Show another form is to send a message to it
-			// or .Invoke on an existing control.
-			mainForm = new Form();
-			mainForm.FormBorderStyle = FormBorderStyle.None;
-			mainForm.ShowInTaskbar = false;
-			mainFormThread = new Thread(() => {
-				mainForm.Show();
-				mainForm.Hide();
-				Application.Run();
-			});
-			mainFormThread.SetApartmentState(ApartmentState.STA);
-			mainFormThread.Start();
+			try
+			{
+				// We don't want to rely on an existing message loop to be able to show forms.
+				// so we start on new thread running its own message loop. We want to be able
+				// to reuse this thread to avoid overhead. However, the only way to make the
+				// thread execute more code to .Show another form is to send a message to it
+				// or .Invoke on an existing control.
+				mainForm = new Form();
+				mainForm.FormBorderStyle = FormBorderStyle.None;
+				mainForm.ShowInTaskbar = false;
+				mainFormThread = new Thread(() =>
+				{
+					mainForm.Show();
+					mainForm.Hide();
+					Application.Run();
+				});
+				mainFormThread.SetApartmentState(ApartmentState.STA);
+				mainFormThread.Start();
 
-			// Everything starts with initializing Host, which manages connection to the 
-			// Tobii Engine and provides all the Tobii Core SDK functionality.
-			// NOTE: Make sure that Tobii.EyeX.exe is running
-			host = new Host();
+				// Everything starts with initializing Host, which manages connection to the 
+				// Tobii Engine and provides all the Tobii Core SDK functionality.
+				// NOTE: Make sure that Tobii.EyeX.exe is running
+				host = new Host();
 
-			// 2. Create stream. 
-			var gazePointDataStream = host.Streams.CreateGazePointDataStream();
+				// 2. Create stream. 
+				var gazePointDataStream = host.Streams.CreateGazePointDataStream();
 
-			// 3. Get the gaze data!
-			//gazePointDataStream.GazePoint((x, y, ts) => Console.WriteLine("Timestamp: {0}\t X: {1} Y:{2}", ts, x, y));
-			//gazePointDataStream.GazePoint((x, y, ts) => { gazeX = (int)x; gazeY = (int)y; });
-			gazePointDataStream.GazePoint(OnGaze);
+				// 3. Get the gaze data!
+				//gazePointDataStream.GazePoint((x, y, ts) => Console.WriteLine("Timestamp: {0}\t X: {1} Y:{2}", ts, x, y));
+				//gazePointDataStream.GazePoint((x, y, ts) => { gazeX = (int)x; gazeY = (int)y; });
+				gazePointDataStream.GazePoint(OnGaze);
+				
+				// okay, it is 4 lines, but you won't be able to see much without this one :)
+				//Console.ReadKey();
 
-			// okay, it is 4 lines, but you won't be able to see much without this one :)
-			//Console.ReadKey();
-
-			// TODO
-			//GetStatus();
+				// TODO
+				//GetStatus();
+			}
+			catch (Exception e)
+			{
+				System.Console.WriteLine("Connect exception: " + e.ToString());
+			}
 		}
 
 		public static async Task GetStatus()
@@ -633,15 +641,19 @@ namespace EyeTrackingHooks
 			RecognizeText(gazeX, gazeY, new Size(300, 300), "testing", out result);
 		}
 
-		public static void ClickText(string text)
+		public static void MouseText(string text, bool click)
 		{
 			Point hitPoint;
 			if (RecognizeText(gazeX, gazeY, new Size(500, 500), text, out hitPoint))
 			{
 				Mouse.Move(hitPoint);
-				Mouse.Press(MouseButton.Left, hitPoint);
-				Thread.Sleep(200);
-				Mouse.Release(MouseButton.Left, hitPoint);
+
+				if (click)
+				{
+					Mouse.Press(MouseButton.Left, hitPoint);
+					Thread.Sleep(200);
+					Mouse.Release(MouseButton.Left, hitPoint);
+				}
 			}
 		}
 

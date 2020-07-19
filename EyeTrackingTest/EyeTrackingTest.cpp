@@ -5,7 +5,7 @@ using namespace System;
 
 extern "C"
 {
-    //__declspec(dllexport)
+    //__declspec(dllimport)
 	void Initialize();
 	void Connect();
 	void InitCharacterRecognition();
@@ -13,7 +13,6 @@ extern "C"
 	void Zoom();
 	int GetX();
 	int GetY();
-	const char * Test2();
 }
 
 int main(array<System::String ^> ^args)

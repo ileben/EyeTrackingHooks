@@ -164,7 +164,7 @@ extern "C"
 	{
 		EyeTrackingHooks::EyeTracking::TestText();
 	}
-
+	/*
 	__declspec(dllexport)
 	const char * Test2()
 	{
@@ -222,23 +222,32 @@ extern "C"
 		//String^ test = gcnew String(oss.str().c_str());
 		//MessageBox::Show(h.ToString());
 	}
-
+	*/
 	__declspec(dllexport)
-	const char * ClickText(const char * searchWord)
+	void ClickText(const char * searchWord)
 	{
 		try
 		{
 			String^ searchString = gcnew String(searchWord);
-			EyeTrackingHooks::EyeTracking::ClickText(searchString);
-			return "";
+			EyeTrackingHooks::EyeTracking::MouseText(searchString, true);
 		}
 		catch (Exception^ e)
 		{
-			//MessageBox::Show("Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
-			String^ result = "Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace;
-			IntPtr ptrToNativeString = Marshal::StringToHGlobalAnsi(result);
-			s_string = (char*)ptrToNativeString.ToPointer();
-			return s_string.c_str();
+			MessageBox::Show("Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
+		}
+	}
+
+	__declspec(dllexport)
+	void TouchText(const char * searchWord)
+	{
+		try
+		{
+			String^ searchString = gcnew String(searchWord);
+			EyeTrackingHooks::EyeTracking::MouseText(searchString, false);
+		}
+		catch (Exception^ e)
+		{
+			MessageBox::Show("Exception:\n" + e->Message + "\nBacktrace:\n" + e->StackTrace);
 		}
 	}
 
