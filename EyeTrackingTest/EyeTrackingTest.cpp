@@ -23,8 +23,8 @@ int main(array<System::String ^> ^args)
 	int y = GetY();
 	//Test2();
 	InitCharacterRecognition();
-	TestText();
-	//Zoom();
+	//TestText();
+	Zoom();
 	getchar();
     return 0;
 }

@@ -46,13 +46,12 @@ namespace EyeTrackingHooks
 		static Bitmap zoomBitmap = null; // Includes the cursor indicator over the background
 		static Object bitmapLock = new object();
 
-		static ZoomPictureBox zoomPicture = null;
+		static Control zoomPicture = null;
 		static ZoomBounds zoomBounds = new ZoomBounds(0, 0);
 		static Stopwatch zoomSteadyStopwatch = new Stopwatch();
 		static Stopwatch zoomStopwatch = new Stopwatch();
 		static List<Point> zoomGazeHistory = new List<Point>();
 		static bool zoomHighlight = false;
-		static Timer zoomUpdateTimer = new Timer(500);
 		static int ZOOM_CURSOR_DELAY = 800;
 
 		static OcrForm ocrForm = null;
@@ -61,6 +60,7 @@ namespace EyeTrackingHooks
 		static IOcrEngine ocrEngine = null;
 
 		static State state = State.None;
+		static Thread gazeThread = null;
 		static Thread mainFormThread = null;
 		static Form mainForm = null;
 
@@ -139,20 +139,6 @@ namespace EyeTrackingHooks
 			}
 		}
 
-		class ZoomPictureBox : PictureBox
-		{
-			protected override void OnPaint(PaintEventArgs e)
-			{
-				// Just in case Zoom() happens on another thread
-				//lock (bitmapLock)
-				{
-					UpdateZoomBackground();
-					UpdateZoomBitmap();
-					base.OnPaint(e);
-				}
-			}
-		}
-
 		public static void OnGaze(double x, double y, double ts)
 		{
 			gazeX = (int)x; gazeY = (int)y;
@@ -217,36 +203,40 @@ namespace EyeTrackingHooks
 			ProcessGaze();
 		}
 
-		public static void UpdateZoomBackground()
-		{
-			ZoomBounds z = zoomBounds;
-
-			Graphics g = Graphics.FromImage(zoomBackground);
-			g.CopyFromScreen(0, 0, 0, 0,
-				new System.Drawing.Size(z.screenW, z.screenH),
-				CopyPixelOperation.SourceCopy);
-			g.Dispose();
-		}
-
-		public static void UpdateZoomBitmap()
+		static void ZoomFormPaint(object sender, System.Windows.Forms.PaintEventArgs e)
 		{
 			ZoomBounds z = zoomBounds;
 
 			Graphics g = Graphics.FromImage(zoomBitmap);
 			g.Clear(Color.Gray);
-			g.DrawImage(zoomBackground, 0, 0, z.source, GraphicsUnit.Pixel);
+			g.CopyFromScreen(z.source.X, z.source.Y, 0, 0,
+				z.source.Size,
+				CopyPixelOperation.SourceCopy);
 
 			float bX = (smoothX - z.big.X) / z.zoomFactor;
 			float bY = (smoothY - z.big.Y) / z.zoomFactor;
-			Pen crossPen = zoomHighlight ? Pens.Red: Pens.Black;
+			Pen crossPen = zoomHighlight ? Pens.Red : Pens.Black;
 			g.DrawLine(crossPen, bX - 10, bY, bX + 10, bY);
 			g.DrawLine(crossPen, bX, bY - 10, bX, bY + 10);
 			g.Dispose();
+
+			// Other interpolation modes can get a very slow without hardware acceleration
+			g = e.Graphics;
+			g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+			g.DrawImage(zoomBitmap, 0, 0, z.big.Width, z.big.Height);
 		}
 
 		public static void OnZoomFormClosed(Object sender, FormClosedEventArgs e)
 		{
 			zoomForm = null;
+		}
+
+		class ZoomControl : Control
+		{
+			public ZoomControl()
+			{
+				DoubleBuffered = true;
+			}
 		}
 
 		public static void Zoom()
@@ -267,9 +257,9 @@ namespace EyeTrackingHooks
 					//zoomForm.TransparencyKey = Color.Red;
 					zoomForm.FormClosed += OnZoomFormClosed;
 
-					zoomPicture = new ZoomPictureBox();
+					zoomPicture = new ZoomControl();
 					zoomPicture.Parent = zoomForm;
-					zoomPicture.SizeMode = PictureBoxSizeMode.StretchImage;
+					zoomPicture.Paint += ZoomFormPaint;
 				}
 
 				zoomForm.Width = z.big.Width;
@@ -289,33 +279,14 @@ namespace EyeTrackingHooks
 
 					zoomBitmap = new Bitmap(z.source.Width, z.source.Height);
 					zoomBackground = new Bitmap(z.screenW, z.screenH);
-
-					UpdateZoomBackground();
-					UpdateZoomBitmap();
 				}
 
-				zoomPicture.Image = zoomBitmap;
 				zoomForm.Show();
 				zoomForm.Left = z.big.X;
 				zoomForm.Top = z.big.Y;
 				zoomStopwatch.Restart();
-
-				//zoomUpdateTimer.Elapsed += OnZoomUpdate;
-				//zoomUpdateTimer.AutoReset = true;
-				//zoomUpdateTimer.Enabled = true;
 			}));
 			followGaze = true;
-		}
-
-		static public void OnZoomUpdate(Object source, ElapsedEventArgs e)
-		{
-			if (zoomForm != null &&
-				zoomForm.Visible)
-			{
-				zoomForm.Opacity = 0;
-				UpdateZoomBackground();
-				zoomForm.Opacity = 1;
-			}
 		}
 
 		static public void Unzoom()
@@ -326,7 +297,6 @@ namespace EyeTrackingHooks
 				zoomStopwatch.Reset();
 				zoomSteadyStopwatch.Reset();
 				zoomHighlight = false;
-				zoomUpdateTimer.Enabled = false;
 			}
 		}
 
@@ -369,9 +339,11 @@ namespace EyeTrackingHooks
 				{
 					mainForm.Show();
 					mainForm.Hide();
+					Application.EnableVisualStyles();
 					Application.Run();
 				});
 				mainFormThread.SetApartmentState(ApartmentState.STA);
+				mainFormThread.Priority = ThreadPriority.Highest;
 				mainFormThread.Start();
 
 				// Everything starts with initializing Host, which manages connection to the 
@@ -386,7 +358,7 @@ namespace EyeTrackingHooks
 				//gazePointDataStream.GazePoint((x, y, ts) => Console.WriteLine("Timestamp: {0}\t X: {1} Y:{2}", ts, x, y));
 				//gazePointDataStream.GazePoint((x, y, ts) => { gazeX = (int)x; gazeY = (int)y; });
 				gazePointDataStream.GazePoint(OnGaze);
-				
+
 				// okay, it is 4 lines, but you won't be able to see much without this one :)
 				//Console.ReadKey();
 
@@ -520,7 +492,7 @@ namespace EyeTrackingHooks
 				if (zoomStopwatch.ElapsedMilliseconds > ZOOM_CURSOR_DELAY)
 				{
 					int z = 4;
-					int k = 1;
+					int k = 2;
 					bool gazeIsSteady = false;
 					GazeZone gazeZone = GetGazeZone(z, z);
 
