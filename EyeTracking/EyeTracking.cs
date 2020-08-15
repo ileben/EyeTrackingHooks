@@ -39,6 +39,8 @@ namespace EyeTrackingHooks
 		static int smoothY = 0;
 
 		static bool followGaze = false;
+		static bool zoomAutoClick = false;
+
 		static List<Point> gazeList = new List<Point>();
 		static Form zoomForm = null;
 
@@ -239,7 +241,7 @@ namespace EyeTrackingHooks
 			}
 		}
 
-		public static void Zoom()
+		public static void Zoom(bool autoClick = false)
 		{
 			ZoomBounds z = new ZoomBounds(gazeX, gazeY);
 			zoomBounds = z;
@@ -286,7 +288,9 @@ namespace EyeTrackingHooks
 				zoomForm.Top = z.big.Y;
 				zoomStopwatch.Restart();
 			}));
+
 			followGaze = true;
+			zoomAutoClick = autoClick;
 		}
 
 		static public void Unzoom()
@@ -396,8 +400,6 @@ namespace EyeTrackingHooks
 		public static void DisableFollowGaze()
 		{
 			followGaze = false;
-
-			Unzoom();
 		}
 
 		public static void TeleportCursor()
@@ -528,7 +530,7 @@ namespace EyeTrackingHooks
 							gazeIsSteady = true;
 						}
 					}
-					if (gazeIsSteady)
+					if (gazeIsSteady && zoomAutoClick)
 					{
 						int STEADY_THRESHOLD = 300;
 						int CLICK_THRESHOLD = 1000;
@@ -634,6 +636,36 @@ namespace EyeTrackingHooks
 			ocrForm = null;
 		}
 
+		public static void OnOcrFormClosing(Object sender, FormClosingEventArgs e)
+		{
+			e.Cancel = true;
+			if (ocrForm != null)
+			{
+				ocrForm.Hide();
+			}
+		}
+
+		public static void DebugCharacterRecognition()
+		{
+			mainForm.Invoke((Action)(() =>
+			{
+				if (ocrForm != null)
+				{
+					// Hide and show to bring it to top
+					bool wasVisible = ocrForm.Visible;
+					ocrForm.Hide();
+					ocrForm.Show();
+					if (!wasVisible)
+					{
+						// Push to the corner only if shown for the first time (allow them to move it afterwards)
+						System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+						ocrForm.Left = screenBounds.Right - ocrForm.Width;
+						ocrForm.Top = screenBounds.Top;
+					}
+				}
+			}));
+		}
+
 		public static bool RecognizeText(int x, int y, Size regionSize, string searchWord, out Point hitPoint)
 		{
 			bool result = false;
@@ -684,24 +716,14 @@ namespace EyeTrackingHooks
 				{
 					ocrForm = new OcrForm();
 					ocrForm.FormClosed += OnOcrFormClosed;
+					ocrForm.FormClosing += OnOcrFormClosing;
 				}
-
 				if (ocrForm.ocrPicture.Image != null)
 				{
 					ocrForm.ocrPicture.Image.Dispose();
 				}
 				ocrForm.ocrPicture.Image = b;
 				ocrForm.ocrText.Text = text;
-				
-				bool wasVisible = ocrForm.Visible;
-				ocrForm.Hide();
-				ocrForm.Show();
-				if (!wasVisible)
-				{
-					System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-					ocrForm.Left = screenBounds.Right - ocrForm.Width;
-					ocrForm.Top = screenBounds.Top;
-				}
 			}));
 
 			return result;

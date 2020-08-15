@@ -112,9 +112,9 @@ extern "C"
 	}
 
 	__declspec(dllexport)
-	void Zoom()
+	void Zoom(bool autoClick)
 	{
-		return EyeTrackingHooks::EyeTracking::Zoom();
+		return EyeTrackingHooks::EyeTracking::Zoom(autoClick);
 	}
 
 	__declspec(dllexport)
@@ -157,6 +157,12 @@ extern "C"
 		void InitCharacterRecognition()
 	{
 		EyeTrackingHooks::EyeTracking::InitCharacterRecognition();
+	}
+	
+	__declspec(dllexport)
+		void DebugCharacterRecognition()
+	{
+		EyeTrackingHooks::EyeTracking::DebugCharacterRecognition();
 	}
 
 	__declspec(dllexport)
