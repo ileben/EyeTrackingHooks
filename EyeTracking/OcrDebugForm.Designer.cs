@@ -1,6 +1,6 @@
 ﻿namespace EyeTrackingHooks
 {
-	partial class OcrForm
+	partial class OcrDebugForm
 	{
 		/// <summary>
 		/// Required designer variable.
@@ -55,7 +55,7 @@
 			this.ocrText.Size = new System.Drawing.Size(281, 198);
 			this.ocrText.TabIndex = 1;
 			// 
-			// OcrForm
+			// OcrDebugForm
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -63,8 +63,8 @@
 			this.Controls.Add(this.ocrText);
 			this.Controls.Add(this.ocrPicture);
 			this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
-			this.Name = "OcrForm";
-			this.Text = "OcrForm";
+			this.Name = "OcrDebugForm";
+			this.Text = "OcrDebugForm";
 			this.TopMost = true;
 			((System.ComponentModel.ISupportInitialize)(this.ocrPicture)).EndInit();
 			this.ResumeLayout(false);

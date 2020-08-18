@@ -53,11 +53,17 @@
     <Compile Include="IOcrEngine.cs" />
     <Compile Include="OcrEngineTesseract.cs" />
     <Compile Include="OcrEngineWindows.cs" />
-    <Compile Include="OcrForm.cs">
+    <Compile Include="OcrDebugForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="OcrForm.Designer.cs">
-      <DependentUpon>OcrForm.cs</DependentUpon>
+    <Compile Include="OcrDebugForm.Designer.cs">
+      <DependentUpon>OcrDebugForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="OcrResponseForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="OcrResponseForm.Designer.cs">
+      <DependentUpon>OcrResponseForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Win32Input.cs" />
@@ -83,8 +89,11 @@
     </COMReference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="OcrForm.resx">
-      <DependentUpon>OcrForm.cs</DependentUpon>
+    <EmbeddedResource Include="OcrDebugForm.resx">
+      <DependentUpon>OcrDebugForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="OcrResponseForm.resx">
+      <DependentUpon>OcrResponseForm.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

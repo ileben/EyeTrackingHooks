@@ -10,9 +10,9 @@ using System.Windows.Forms;
 
 namespace EyeTrackingHooks
 {
-	public partial class OcrForm : Form
+	public partial class OcrDebugForm : Form
 	{
-		public OcrForm()
+		public OcrDebugForm()
 		{
 			InitializeComponent();
 		}

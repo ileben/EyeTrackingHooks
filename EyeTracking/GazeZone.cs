@@ -10,11 +10,14 @@ namespace EyeTrackingHooks
 {
 	public struct GazeZone
 	{
+		bool inside;
 		public Point count;
 		public Point position;
 
 		public GazeZone(int zoneCountX, int zoneCountY, Point screenPosition, Rectangle screenBounds)
 		{
+			inside = screenBounds.Contains(screenPosition);
+
 			count = new Point(zoneCountX, zoneCountY);
 
 			int zoneSizeX = screenBounds.Width / zoneCountX;
@@ -24,6 +27,11 @@ namespace EyeTrackingHooks
 			int y = (screenPosition.Y - screenBounds.Top) / zoneSizeY;
 
 			position = new Point(x, y);
+		}
+
+		public bool IsInside()
+		{
+			return inside;
 		}
 
 		public bool IsOnLeftEdge()

@@ -56,7 +56,8 @@ namespace EyeTrackingHooks
 		static bool zoomHighlight = false;
 		static int ZOOM_CURSOR_DELAY = 800;
 
-		static OcrForm ocrForm = null;
+		static OcrResponseForm ocrResponseForm = null;
+		static OcrDebugForm ocrDebugForm = null;
 		static OcrEngineWindows ocrEngineWindows = null;
 		static OcrEngineTesseract ocrEngineTesseract = null;
 		static IOcrEngine ocrEngine = null;
@@ -498,7 +499,11 @@ namespace EyeTrackingHooks
 					bool gazeIsSteady = false;
 					GazeZone gazeZone = GetGazeZone(z, z);
 
-					if (gazeZone.IsOnEdge())
+					if (!gazeZone.IsInside())
+					{
+						// Do nothing if they look outside the blow-up picture rather then scroll indefinitely
+					}
+					else if (gazeZone.IsOnEdge())
 					{
 						zoomBounds.source.X += gazeZone.GetHorizontalEdgeSign() * k;
 						zoomBounds.source.Y += gazeZone.GetVerticalEdgeSign() * k;
@@ -631,17 +636,31 @@ namespace EyeTrackingHooks
 			}
 		}
 
+		public static void OnOcrResponseFormClosed(Object sender, FormClosedEventArgs e)
+		{
+			ocrResponseForm = null;
+		}
+
+		public static void OnOcrResponseFormClosing(Object sender, FormClosingEventArgs e)
+		{
+			e.Cancel = true;
+			if (ocrResponseForm != null)
+			{
+				ocrResponseForm.Hide();
+			}
+		}
+
 		public static void OnOcrFormClosed(Object sender, FormClosedEventArgs e)
 		{
-			ocrForm = null;
+			ocrDebugForm = null;
 		}
 
 		public static void OnOcrFormClosing(Object sender, FormClosingEventArgs e)
 		{
 			e.Cancel = true;
-			if (ocrForm != null)
+			if (ocrDebugForm != null)
 			{
-				ocrForm.Hide();
+				ocrDebugForm.Hide();
 			}
 		}
 
@@ -649,18 +668,18 @@ namespace EyeTrackingHooks
 		{
 			mainForm.Invoke((Action)(() =>
 			{
-				if (ocrForm != null)
+				if (ocrDebugForm != null)
 				{
 					// Hide and show to bring it to top
-					bool wasVisible = ocrForm.Visible;
-					ocrForm.Hide();
-					ocrForm.Show();
+					bool wasVisible = ocrDebugForm.Visible;
+					ocrDebugForm.Hide();
+					ocrDebugForm.Show();
 					if (!wasVisible)
 					{
 						// Push to the corner only if shown for the first time (allow them to move it afterwards)
 						System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-						ocrForm.Left = screenBounds.Right - ocrForm.Width;
-						ocrForm.Top = screenBounds.Top;
+						ocrDebugForm.Left = screenBounds.Right - ocrDebugForm.Width;
+						ocrDebugForm.Top = screenBounds.Top;
 					}
 				}
 			}));
@@ -677,10 +696,10 @@ namespace EyeTrackingHooks
 
 			Point origin = new Point(x - regionSize.Width / 2, y - regionSize.Height / 2);
 			Bitmap b = new Bitmap(regionSize.Width, regionSize.Height);
-			Graphics g = Graphics.FromImage(b);
-			g.CopyFromScreen(origin.X, origin.Y, 0, 0, regionSize, CopyPixelOperation.SourceCopy);
-			g.Dispose();
-
+			using (Graphics g = Graphics.FromImage(b))
+			{
+				g.CopyFromScreen(origin.X, origin.Y, 0, 0, regionSize, CopyPixelOperation.SourceCopy);
+			}
 			//b = new Bitmap(Image.FromFile("Capture.JPG"));
 
 			Point imageLocalPoint;
@@ -712,18 +731,36 @@ namespace EyeTrackingHooks
 						
 			mainForm.Invoke((Action)(() =>
 			{
-				if (ocrForm == null)
+				if (!result)
 				{
-					ocrForm = new OcrForm();
-					ocrForm.FormClosed += OnOcrFormClosed;
-					ocrForm.FormClosing += OnOcrFormClosing;
+					if (ocrResponseForm == null)
+					{
+						ocrResponseForm = new OcrResponseForm();
+						ocrResponseForm.FormClosed += OnOcrResponseFormClosed;
+						ocrResponseForm.FormClosing += OnOcrResponseFormClosing;
+					}
+
+					string responseText = searchWord + "?";
+					ocrResponseForm.Show(responseText);
+
+					System.Drawing.Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+					ocrResponseForm.Left = screenBounds.Right - ocrResponseForm.Width;
+					ocrResponseForm.Top = screenBounds.Top;
 				}
-				if (ocrForm.ocrPicture.Image != null)
 				{
-					ocrForm.ocrPicture.Image.Dispose();
+					if (ocrDebugForm == null)
+					{
+						ocrDebugForm = new OcrDebugForm();
+						ocrDebugForm.FormClosed += OnOcrFormClosed;
+						ocrDebugForm.FormClosing += OnOcrFormClosing;
+					}
+					if (ocrDebugForm.ocrPicture.Image != null)
+					{
+						ocrDebugForm.ocrPicture.Image.Dispose();
+					}
+					ocrDebugForm.ocrPicture.Image = b;
+					ocrDebugForm.ocrText.Text = text;
 				}
-				ocrForm.ocrPicture.Image = b;
-				ocrForm.ocrText.Text = text;
 			}));
 
 			return result;
