@@ -58,7 +58,6 @@ static void GetFocusedText()
 extern "C"
 {
 	bool isInitialized = false;
-	bool followGaze = false;
 	char *s_text = nullptr;
 	std::string s_string = "";
      
@@ -110,6 +109,13 @@ extern "C"
 	{
 		return EyeTrackingHooks::EyeTracking::DisableFollowGaze();
 	}
+
+	__declspec(dllexport)
+	void BeginDrag()
+	{
+		return EyeTrackingHooks::EyeTracking::BeginDrag();
+	}
+
 
 	__declspec(dllexport)
 	void Zoom(bool autoClick)

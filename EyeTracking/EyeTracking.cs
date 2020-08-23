@@ -16,6 +16,7 @@ using System.Reflection;
 using System.IO;
 using System.Timers;
 using Timer = System.Timers.Timer;
+using Vector2 = System.Numerics.Vector2;
 
 using Tobii.Interaction;
 using Tobii.Interaction.Framework;
@@ -27,6 +28,8 @@ namespace EyeTrackingHooks
 		enum State
 		{
 			None,
+			Following,
+			Dragging,
 			Strafing,
 			Orbiting
 		}
@@ -38,7 +41,6 @@ namespace EyeTrackingHooks
 		static int smoothX = 0;
 		static int smoothY = 0;
 
-		static bool followGaze = false;
 		static bool zoomAutoClick = false;
 
 		static List<Point> gazeList = new List<Point>();
@@ -63,6 +65,9 @@ namespace EyeTrackingHooks
 		static IOcrEngine ocrEngine = null;
 
 		static State state = State.None;
+		static Stopwatch dragStopwatch = new Stopwatch();
+		static Vector2 dragPosition = new Vector2();
+
 		static Thread gazeThread = null;
 		static Thread mainFormThread = null;
 		static Form mainForm = null;
@@ -153,7 +158,7 @@ namespace EyeTrackingHooks
 				gazeList.RemoveAt(0);
 			}
 
-			if (followGaze)
+			if (state == State.Following)
 			{
 				// Filtering to smooth-out gaze position
 				float endX = (float)gazeList.Last().X;
@@ -290,7 +295,7 @@ namespace EyeTrackingHooks
 				zoomStopwatch.Restart();
 			}));
 
-			followGaze = true;
+			state = State.Following;
 			zoomAutoClick = autoClick;
 		}
 
@@ -318,7 +323,7 @@ namespace EyeTrackingHooks
 			if (zoomForm == null)
 				return;
 
-			followGaze = false;
+			state = State.None;
 
 			System.Windows.Forms.Cursor.Position = GetZoomGaze();
 
@@ -395,12 +400,19 @@ namespace EyeTrackingHooks
 
 		public static void EnableFollowGaze()
 		{
-			followGaze = true;
+			state = State.Following;
 		}
 
 		public static void DisableFollowGaze()
 		{
-			followGaze = false;
+			state = State.None;
+		}
+
+		public static void BeginDrag()
+		{
+			dragPosition = new Vector2(Cursor.Position.X, Cursor.Position.Y);
+			dragStopwatch.Restart();
+			state = State.Dragging;
 		}
 
 		public static void TeleportCursor()
@@ -495,7 +507,6 @@ namespace EyeTrackingHooks
 				if (zoomStopwatch.ElapsedMilliseconds > ZOOM_CURSOR_DELAY)
 				{
 					int z = 4;
-					int k = 2;
 					bool gazeIsSteady = false;
 					GazeZone gazeZone = GetGazeZone(z, z);
 
@@ -505,6 +516,8 @@ namespace EyeTrackingHooks
 					}
 					else if (gazeZone.IsOnEdge())
 					{
+						// Scroll the zoomed-in view when they look at the edge
+						int k = 2;
 						zoomBounds.source.X += gazeZone.GetHorizontalEdgeSign() * k;
 						zoomBounds.source.Y += gazeZone.GetVerticalEdgeSign() * k;
 					}
@@ -551,7 +564,7 @@ namespace EyeTrackingHooks
 							if (t > CLICK_THRESHOLD)
 							{
 								Unzoom();
-								followGaze = false;
+								state = State.None;
 
 								// Click
 								Mouse.Press(MouseButton.Left, GetZoomGaze());
@@ -567,7 +580,27 @@ namespace EyeTrackingHooks
 					}
 				}
 			}
-			if (state == State.Strafing)
+			if (state == State.Dragging)
+			{
+				float DISTANCE_THRESHOLD = 40.0f;
+				long dt = dragStopwatch.ElapsedMilliseconds;
+				dragStopwatch.Restart();
+
+				Vector2 gazePosition = new Vector2(gazeX, gazeY);
+				Vector2 gazeDirection = gazePosition - dragPosition;
+				float distance = gazeDirection.Length();
+				if (distance > DISTANCE_THRESHOLD)
+				{
+					// We need to update position in floating point to allow for sub-pixel frame to frame movement 
+					float speed = Math.Max(10.0f, (distance - DISTANCE_THRESHOLD) * 2.0f);
+					float deltaPosition = (float)dt * speed / 1000.0f;
+					dragPosition += gazeDirection * (deltaPosition / distance);
+
+					// Converting back to integer loses sub pixel movement!
+					Cursor.Position = new Point((int)dragPosition.X, (int)dragPosition.Y);
+				}
+			}
+			else if (state == State.Strafing)
 			{
 				GazeZone gazeZone = GetGazeZone(3, 3);
 
